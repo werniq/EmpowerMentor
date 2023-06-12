@@ -2,6 +2,8 @@ package models
 
 import (
 	"database/sql"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/lib/pq"
 	"strings"
 	"time"
 )
@@ -25,7 +27,22 @@ type UserBotConfiguration struct {
 	BedTime                   time.Time            `json:"bed_time"`
 	PreferableTimeToMeditate  time.Time            `json:"preferable_time_to_meditate"`
 	PreferableTimeToExercise  time.Time            `json:"preferable_time_to_exercise"`
-	PreferableTimeToRead      time.Time            `json:"preferable_time_to_read"`
+	PrefrableTimeToRead       time.Time            `json:"preferable_time_to_read"`
+}
+
+type SpoonocularConfiguration struct {
+	TimeFrame      string `json:"timeFrame"`
+	TargetCalories string `json:"targetCalories"`
+	Diet           string `json:"diet"`
+	Exclude        string `json:"exclude"`
+	Step           int
+}
+
+type Message struct {
+	ChatId    int64  `json:"chat_id"`
+	MessageId int    `json:"message_id"`
+	UserId    int64  `json:"user_id"`
+	Text      string `json:"text"`
 }
 
 type Motivation struct {
@@ -51,6 +68,44 @@ func (m *DatabaseModel) GetDailyMeditationReminderForUser(userId int64) (time.Ti
 		return time.Time{}, err
 	}
 	return result, nil
+}
+
+// SaveMessage saves message to the database
+func (m *DatabaseModel) SaveMessage(update tgbotapi.Update) error {
+	stmt := `
+		INSERT INTO 
+			messages(chat_id, message_id, user_id, text)
+		VALUES($1, $2, $3, $4)
+	`
+
+	msg := update.Message
+	_, err := m.DB.Exec(stmt, msg.Chat.ID, msg.MessageID, msg.From.ID, msg.Text)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// RetrieveLastUserMessage returns last message sent by user
+func (m *DatabaseModel) RetrieveLastUserMessage(userId int64) (Message, error) {
+	stmt := `
+		SELECT 
+			chat_id, message_id, user_id, text
+		FROM 
+			messages
+		WHERE 
+			user_id = $1
+		ORDER BY 
+			message_id DESC
+		LIMIT 1
+	`
+
+	var msg Message
+	res := m.DB.QueryRow(stmt, userId)
+	if err := res.Scan(&msg.ChatId, &msg.MessageId, &msg.UserId, &msg.Text); err != nil {
+		return Message{}, err
+	}
+	return msg, nil
 }
 
 // GetDailyExerciseReminderForUser returns time when bot sends daily exercise reminder to user
@@ -110,9 +165,29 @@ func (m *DatabaseModel) SetDailyExerciseReminderForUser(userId int64, time time.
 	return nil
 }
 
+// SetDailySleepingReminderForUser resets time when bot sends daily sleeping reminder to user
+func (m *DatabaseModel) SetDailySleepingReminderForUser(userId int64, time time.Time) error {
+	stmt := "UPDATE user_bot_configuration SET bed_time = $1 WHERE user_id = $2"
+	_, err := m.DB.Exec(stmt, time, userId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // SetDailyReadingReminderForUser resets time when bot sends daily reading reminder to user
 func (m *DatabaseModel) SetDailyReadingReminderForUser(userId int64, time time.Time) error {
 	stmt := "UPDATE user_bot_configuration SET preferable_time_to_read = $1 WHERE user_id = $2"
+	_, err := m.DB.Exec(stmt, time, userId)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// SetDailyWakeUpReminderForUser resets time when bot sends daily reminder for doing something to user
+func (m *DatabaseModel) SetDailyWakeUpReminderForUser(userId int64, time time.Time) error {
+	stmt := "UPDATE user_bot_configuration SET wake_up_time = $1 WHERE user_id = $2"
 	_, err := m.DB.Exec(stmt, time, userId)
 	if err != nil {
 		return err
@@ -167,8 +242,10 @@ func (m *DatabaseModel) GetUserReminders(userId int64) ([]time.Time, []string, e
 		return nil, nil, err
 	}
 
-	if err = row.Scan(&meditation, &exercise, &reading); err != nil {
-		return nil, nil, err
+	for row.Next() {
+		if err = row.Scan(&meditation, &exercise, &reading); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	var times []time.Time
@@ -366,7 +443,7 @@ func (m *DatabaseModel) StoreUserData(u UserBotConfiguration) error {
 		u.BedTime,
 		u.PreferableTimeToMeditate,
 		u.PreferableTimeToExercise,
-		u.PreferableTimeToRead)
+		u.PrefrableTimeToRead)
 
 	if err != nil {
 		return err
@@ -461,6 +538,88 @@ func (m *DatabaseModel) SaveUserCustomChallenge(userId int64, challenge string) 
 	}
 
 	return nil
+}
+
+// RetrieveUserRandomCustomChallenge returns random custom user challenge
+func (m *DatabaseModel) RetrieveUserRandomCustomChallenge(userId int64) (string, error) {
+	stmt := "SELECT challenge from user_challenges WHERE user_id = $1 ORDER BY random() LIMIT 1;"
+
+	var challenge string
+	err := m.DB.QueryRow(stmt, userId).Scan(&challenge)
+	if err != nil {
+		return "", err
+	}
+
+	return challenge, nil
+}
+
+func (m *DatabaseModel) RetrieveUserChallengesCount(userId int64) (int, error) {
+	stmt := "SELECT id from user_challenges;"
+
+	var ids int
+	err := m.DB.QueryRow(stmt).Scan(&ids)
+	if err != nil {
+		return 0, err
+	}
+
+	return ids, nil
+}
+
+// GetUserWakeupTime returns user wake up time
+func (m *DatabaseModel) GetUserWakeupTime(userId int64) (time.Time, error) {
+	stmt := "SELECT wake_up_time FROM user_bot_configuration WHERE user_id = $1"
+
+	var wakeUpTime time.Time
+	err := m.DB.QueryRow(stmt, userId).Scan(&wakeUpTime)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return wakeUpTime, nil
+}
+
+// StoreNewsCategories stores user's news categories
+func (m *DatabaseModel) StoreNewsCategories(category string, userId int64) error {
+	stmt := "SELECT categoriers FROM daily_newsletter WHERE user_id = $1"
+	var c string
+	err := m.DB.QueryRow(stmt, userId).Scan(&c)
+	if err != nil {
+		return err
+	}
+
+	c += category
+	stmt = `
+		INSERT INTO 
+		    daily_newsletter 
+		    (user_id, categories) 
+		VALUES 
+		    ($1, $2)`
+
+	_, err = m.DB.Exec(stmt, userId, c)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// RetrieveNewsCategories returns user's news categories
+func (m *DatabaseModel) RetrieveNewsCategories(userId int) ([]string, error) {
+	stmt := `
+		SELECT 
+		    categories 
+		FROM 
+		    daily_newsletter 
+		WHERE 
+		    user_id = $1`
+
+	var categories []string
+	err := m.DB.QueryRow(stmt, userId).Scan(pq.Array(&categories))
+	if err != nil {
+		return nil, err
+	}
+
+	return categories, nil
 }
 
 //func (m *DatabaseModel) SetDailyHabitReminderForUser(int64 string) error       {

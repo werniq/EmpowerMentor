@@ -33,15 +33,14 @@ type CardioWorkout struct {
 
 var (
 	MuscleToCount = map[string]int{
-		"back":   15,
-		"chest":  16,
-		"biceps": 15,
-		"legs":   15,
-		"glutes": 11,
+		"back":    15,
+		"chest":   16,
+		"biceps":  15,
+		"legs":    15,
+		"glutes":  18,
+		"triceps": 15,
 	}
-	muscles = [7]string{
-		"back", "chest", "biceps", "triceps", "abs", "legs", "glutes",
-	}
+	muscles = []string{"back", "chest", "biceps", "triceps", "shoulders", "legs", "glutes"}
 )
 
 // back -> 16
@@ -61,6 +60,21 @@ func (m *DatabaseModel) CreateMuscleGroupTables() error {
     		technique text not null,
     		videoURI text not null
 		);`, muscles[i])
+
+		_, err = m.DB.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *DatabaseModel) DropTables() error {
+	var stmt string
+	var err error
+	for i := 0; i <= len(muscles)-1; i++ {
+		stmt = fmt.Sprintf(`DROP TABLE "%s";`, muscles[i])
 
 		_, err = m.DB.Exec(stmt)
 		if err != nil {
@@ -116,7 +130,7 @@ func (m *DatabaseModel) GetExerciseById(id int, table string) (Exercise, error) 
 // TruncateTables removes all records from all existed tables, in my database
 func (m *DatabaseModel) TruncateTables() error {
 	stmt := `TRUNCATE TABLE $1`
-	for i := 0; i < len(muscles)-1; i++ {
+	for i := 0; i <= len(muscles)-1; i++ {
 		if row := m.DB.QueryRow(stmt, muscles[i]); row.Err() != nil {
 			fmt.Printf("Error truncating table %s: %v", muscles[i], row.Err())
 			return row.Err()
@@ -130,6 +144,7 @@ func (m *DatabaseModel) SaveAllLegsExercises() error {
 	var legs []string
 	var technique []string
 	var videoURI []string
+
 	legs = append(legs, "Back Squat")
 	technique = append(technique, `
 		Set up the barbell: Start by positioning the barbell across your upper traps and then secure it in place with both hands. Make sure the bar is balanced and evenly distributed.
@@ -283,7 +298,7 @@ func (m *DatabaseModel) SaveAllLegsExercises() error {
 
 	stmt := `
 		insert into 
-			legs
+			legs (title, technique, videoURI)
 		values ($1, $2, $3)
 	`
 
@@ -303,6 +318,10 @@ func (m *DatabaseModel) StoreAllGlutesExercises() error {
 	var glutes []string
 	var technique []string
 	var videoURI []string
+	glutes = append(glutes, "Reverse Lunges")
+	technique = append(technique, "Stand tall with your feet hip-width apart. Take a step backward with one leg, lowering your body until your front knee is bent at a 90-degree angle. Push through your front heel to return to the starting position. Repeat on the other leg.")
+	videoURI = append(videoURI, "https://www.youtube.com/watch?v=QD6S8XIfOEM&ab_channel=TheBodyCoachTV")
+
 	glutes = append(glutes, "Conventional Deadlift")
 	technique = append(technique, ``)
 	videoURI = append(videoURI, "https://youtu.be/kH-GjbMfi1o")
@@ -351,13 +370,33 @@ func (m *DatabaseModel) StoreAllGlutesExercises() error {
 	technique = append(technique, `Stand with your feet around shoulder width apart with a dumbbell or kettlebell and hold the weight directly under your chin with your elbows tucked in. Brace your core, tense your back, and ensure that you feel stable. Keep your chest up and squat down until both of your legs bend to around 90 degrees. Stand back up by driving through the floor.`)
 	videoURI = append(videoURI, "https://www.youtube.com/watch?v=CkFzgR55gho&ab_channel=PhysiqueDevelopment")
 
+	glutes = append(glutes, "Banded Glute Bridge")
+	technique = append(technique, "Place a resistance band just above your knees and lie on your back with your knees bent and feet flat on the ground. Push through your heels and lift your hips off the ground, squeezing your glutes at the top. Lower your hips back down and repeat.")
+	videoURI = append(videoURI, "https://www.youtube.com/watch?v=7a7jZj6YO80&ab_channel=AnabolicAliens")
+
+	glutes = append(glutes, "Dumbbell Glute Bridge")
+	technique = append(technique, "Lie on your back with your knees bent and feet flat on the ground. Hold a dumbbell on your hips and push through your heels to lift your hips off the ground, squeezing your glutes at the top. Lower your hips back down and repeat.")
+	videoURI = append(videoURI, "https://www.youtube.com/watch?v=8bbE64NuDTU&ab_channel=StrongLifts")
+
+	glutes = append(glutes, "Glute Bridge March")
+	technique = append(technique, "Lie on your back with your knees bent and feet flat on the ground. Lift your hips off the ground into a glute bridge position. While maintaining the bridge, lift one foot off the ground and bring your knee towards your chest. Lower your foot back down and repeat on the other side.")
+	videoURI = append(videoURI, "https://www.youtube.com/watch?v=7nzXdrjgeHg&ab_channel=HeatherRobertson")
+
+	glutes = append(glutes, "Gluteral bridge")
+	technique = append(technique, "Lie on your back with your knees bent and feet flat on the ground. Lift your hips off the ground into a glute bridge position. While maintaining the bridge, lift one foot off the ground and bring your knee towards your chest. Lower your foot back down and repeat on the other side.")
+	videoURI = append(videoURI, "https://youtu.be/S_uZP4UH6J0")
+
+	glutes = append(glutes, "Hip Thrust(specifically for my lovely girlfriend @nightrina)")
+	technique = append(technique, `Things to keep in mind: 1. Make Sure the Bench Hits Your Mid Back Find a bench that comes to your middle back when sitting down on the floor. If you're using a tall bench, sit on a pad or some mats to raise your body. If your bench is too high on your back, you won't be able to get as much leverage through your hips, says Jason Pak, CPT, a certified personal trainer, USA Weightlifting–certified sports performance coach and co-owner of Achieve Fitness Boston. 2. Play With Foot Placement. 3. Look forward. Instead of letting your head fall back in line with the bench, keep your chin slightly lowered toward your chest. Throughout the entire exercise, keep your eyes locked on the wall in front of you and your head will naturally stay in place. Technique:	1. Sit on the floor with your mid back against the edge of a bench or box and rest a barbell on top of your hips, holding it with both hands.	2. Squeeze your glutes and push through your heels to raise your hips and the weight up toward the ceiling.	3. Pause for a few seconds, then slowly lower your hips down to return to the starting position.`)
+	videoURI = append(videoURI, "https://youtu.be/S_uZP4UH6J0")
+
 	stmt := `
 		insert into 
 			glutes(title, technique, videouri)
 		values  ($1, $2, $3)
 	`
 
-	for i := 0; i < len(glutes)-1; i++ {
+	for i := 0; i <= len(glutes)-1; i++ {
 		if row := m.DB.QueryRowContext(context.Background(), stmt, glutes[i], technique[i], videoURI[i]); row.Err() != nil {
 			fmt.Printf("Error inserting values in database: %v", row.Err())
 			return row.Err()
@@ -716,6 +755,79 @@ func (m *DatabaseModel) StoreAllChestExercises() error {
 	return nil
 }
 
+func (m *DatabaseModel) SaveAllShouldersExercises() error {
+	var title []string
+	var technique []string
+	var videoURI []string
+
+	title = append(title, "Seated Dumbbell Shoulder Press")
+	technique = append(technique, `
+		1. Sit on a bench with back support and hold a dumbbell in each hand at shoulder level, palms facing forward.
+		2. Press the dumbbells upward until your arms are fully extended overhead.
+		3. Slowly lower the dumbbells back to the starting position.
+		4. Repeat for the desired number of repetitions.
+		5. Keep your core engaged and maintain proper posture throughout the exercise.
+	`)
+	videoURI = append(videoURI, "https://youtu.be/-urozvDwN7I")
+
+	title = append(title, "Barbell Overhead Press")
+	technique = append(technique, `
+		1. Stand with your feet shoulder-width apart and grip the barbell with your hands slightly wider than shoulder-width apart, palms facing forward.
+		2. Lift the barbell off the rack and position it at shoulder level with your elbows bent and the bar resting on your clavicles.
+		3. Press the barbell upward until your arms are fully extended overhead.
+		4. Lower the barbell back to the starting position, keeping your core engaged and maintaining proper posture throughout the exercise.
+		5. Repeat for the desired number of repetitions.
+		6. Be mindful of your breathing and avoid arching your lower back excessively.
+	`)
+	videoURI = append(videoURI, "https://youtu.be/CnBmiBqp-AI")
+
+	title = append(title, "Dumbbell Lateral Raise")
+	technique = append(technique, `
+		1. Stand with your feet shoulder-width apart and hold a dumbbell in each hand at your sides, palms facing inward.
+		2. Keeping a slight bend in your elbows, raise your arms out to the sides until they are parallel to the floor.
+		3. Pause briefly at the top of the movement, then lower the dumbbells back to the starting position.
+		4. Repeat for the desired number of repetitions.
+		5. Focus on using your shoulder muscles to lift the dumbbells, rather than relying on momentum.
+		6. Keep your core engaged and maintain proper posture throughout the exercise.
+	`)
+	videoURI = append(videoURI, "https://youtu.be/d32l9mSIoYc")
+
+	title = append(title, "Arnold Press")
+	technique = append(technique, `
+		1. Sit on a bench with back support and hold a dumbbell in each hand at shoulder level, palms facing your body.
+		2. Rotate your palms as you press the dumbbells overhead, so that at the top of the movement your palms are facing forward.
+		3. Reverse the motion and rotate your palms back to the starting position as you lower the dumbbells back to shoulder level.
+		4. Repeat for the desired number of repetitions.
+		5. Keep your core engaged and maintain proper posture throughout the exercise.
+	`)
+	videoURI = append(videoURI, "https://youtu.be/cn1bYxO2oAE")
+
+	title = append(title, "Front Raise")
+	technique = append(technique, `
+		1. Stand with your feet shoulder-width apart and hold a dumbbell in each hand with your palms facing your thighs.
+		2. Keeping your arms straight and maintaining a slight bend in your elbows, lift the dumbbells directly in front of you until they are at shoulder level.
+		3. Pause briefly at the top of the movement, then lower the dumbbells back to the starting position.
+		4. Repeat for the desired number of repetitions.
+		5. Focus on using your shoulder muscles to lift the dumbbells, rather than relying on momentum.
+		6. Keep your core engaged and maintain proper posture throughout the exercise.
+	`)
+	videoURI = append(videoURI, "https://youtu.be/tb-XZ1Cfah4")
+
+	stmt := `INSERT INTO shoulders(title, technique, videouri) VALUES ($1, $2, $3)`
+
+	for i := 0; i < len(title)-1; i++ {
+		if len(title[i]) >= 50 {
+			title[i] = title[i][:50]
+		}
+		if _, err := m.DB.Query(stmt, title[i], technique[i], videoURI[i]); err != nil {
+			fmt.Printf("\nError inserting into CHEST table: %v\n", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 //  StoreAllTricepsExercises stores all exercises for glutes in database
 //  func (db *DatabaseModel) StoreAllTricepsExercises() error {
 //	var triceps []string
@@ -767,7 +879,9 @@ func (m *DatabaseModel) GetOneRandomExercise(table string) (Exercise, error) {
 	var exercise Exercise
 	var err error
 
-	id := rand.Intn(MuscleToCount[table]) + 1
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	id := r.Intn(MuscleToCount[table] + 1)
 
 	exercise, err = m.GetExerciseById(id, table)
 	if err != nil {
@@ -779,12 +893,15 @@ func (m *DatabaseModel) GetOneRandomExercise(table string) (Exercise, error) {
 			return emptyExercise, fmt.Errorf("error getting exercise from table %s by id[%d]: %w", table, id-1, err)
 		}
 	}
-	fmt.Println(exercise)
 
 	return exercise, nil
 }
 
 func (m *DatabaseModel) GenerateXRandomExercises(table string, num int) ([]Exercise, error) {
+	if StringInArray(table, muscles) == false {
+		return nil, fmt.Errorf("table %s not found in MuscleGroups", table)
+	}
+
 	var exercises []Exercise
 	for i := 0; i < num; i++ {
 		ex, err := m.GetOneRandomExercise(table)
@@ -794,4 +911,13 @@ func (m *DatabaseModel) GenerateXRandomExercises(table string, num int) ([]Exerc
 		exercises = append(exercises, ex)
 	}
 	return exercises, nil
+}
+
+func StringInArray(s string, arr []string) bool {
+	for i := 0; i <= len(arr)-1; i++ {
+		if s == arr[i] {
+			return true
+		}
+	}
+	return false
 }

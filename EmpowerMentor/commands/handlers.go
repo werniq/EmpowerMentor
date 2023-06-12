@@ -2,75 +2,33 @@ package commands
 
 import (
 	"fmt"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"log"
 	"math/rand"
 	"os"
-	"self-improvement-bot/EmpowerMentor/models"
 	"self-improvement-bot/commands/utils"
+	"self-improvement-bot/models"
 	"strconv"
 	"strings"
 	"time"
-
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// i am creating bot for tracking self improvement
-// want to add subscription for this bot so that users can track their progress
-// and with time they will be able to see their progress
-// functionality of bot:
-// motivational quote few times a day
-// daily reminder to track progress
-// daily trackers for:
-// - water
-// - food
-// - sleep
-// - meditation
-// - exercise
-// - reading
-// additionally, there will be a possibility to add custom trackers
-// and to see progress in graphs
-
-// add functionality to send recommendations about book reading
-// add functionality to send recommendations about meditation
-// add functionality to send recommendations about exercises, for particular muscle groups
-// add functionality to send recommendations about sleep
-
-// ability to set up reminders for all of the above
-// ability to set up custom goals and reminders for them
-
-// each morning bot will send a message with a quote and a reminder to track progress
-// + challenges each morning
-// habit building:
-// few times a day send a message with a reminder to build a habit
-
-// 1. Daily Affirmations: Start your day with uplifting affirmations and positive quotes to boost your confidence and cultivate a positive mindset.
-// 2. Goal Tracker: Set personal goals, track your progress, and receive motivational messages to stay focused and driven.
-// 3. Habit Builder: Build positive habits with personalized reminders, tips, and habit streaks analysis for long-term success.
-// 4. Meditation and Mindfulness: Experience tranquility and improve your mental well-being with guided meditation sessions and mindfulness exercises.
-// 5. Productivity Booster: Unlock your productivity potential with effective time management techniques, productivity tips, and personalized recommendations.
-// 6. Self-Care Planner: Prioritize self-care with tailored routines, self-reflection exercises, and curated self-care suggestions for enhanced well-being.
-// 7. Personal Development Courses: Learn and grow with self-improvement courses on various topics, delivered by experts in personal development.
-// 8. Motivational Challenges: Challenge yourself, step out of your comfort zone, and unlock new achievements to reach your full potential.
-// 9. Daily Quotes: Get inspired by daily quotes from the world’s greatest minds and thought leaders.
-
-type Config struct {
-	ServerURI string
-}
-
 type Application struct {
-	Bot             *tgbotapi.BotAPI
-	DB              *models.DatabaseModel
-	Logger          *log.Logger
-	Config          Config
-	LastUserMessage map[int64]tgbotapi.Message
-	UpdatesChannel  tgbotapi.UpdatesChannel
-	Stripe          struct {
+	Bot    *tgbotapi.BotAPI
+	DB     *models.DatabaseModel
+	Logger *log.Logger
+	Config Config
+	Stripe struct {
 		PublishableKey string
 		SecretKey      string
 	}
 	Spoonocular struct {
 		ApiKey string
 	}
+}
+
+type Config struct {
+	ServerURI string
 }
 
 var (
@@ -86,7 +44,6 @@ var (
 		"Limit naps: If you have trouble sleeping at night, try to limit daytime napping or keep it short (around 20-30 minutes) and avoid napping too close to bedtime.",
 		"Consider your sleep environment: Choose a comfortable mattress, pillows, and bedding that suit your preferences and support your body.",
 	}
-
 	mentalHealthRecommendations = []string{
 		"Practice self-care: Take time for yourself and engage in activities that you enjoy. This could include hobbies, relaxation techniques, spending time in nature, or engaging in creative outlets.",
 		"Prioritize sleep: Ensure you get enough quality sleep as it plays a crucial role in maintaining good mental health.",
@@ -120,25 +77,25 @@ var (
 		"protein",
 		"womens-health",
 	}
-	AvailableMuscleGroup    = []string{"back", "biceps", "chest", "triceps", "legs", "shoulders"}
-	AvaliableNewsCategories = utils.RetrieveCategories()
-	states                  = make(map[int64]models.UserBotConfiguration)
+	AvailableMuscleGroup     = []string{"back", "biceps", "chest", "triceps", "legs", "shoulders"}
+	AvaliableNewsCategories  = utils.RetrieveCategories()
+	ConfigureStates          = make(map[int64]models.UserBotConfiguration)
+	SpoonocularConfiguration = make(map[int64]models.SpoonocularConfiguration)
+	muscles                  = []string{"back", "chest", "biceps", "triceps", "shoulders", "legs", "glutes"}
 )
 
-func NewApplication(bot *tgbotapi.BotAPI, db *models.DatabaseModel, logger *log.Logger, updatesChannel tgbotapi.UpdatesChannel, config Config) *Application {
+func NewApplication(bot *tgbotapi.BotAPI, db *models.DatabaseModel, logger *log.Logger, cfg Config) *Application {
 	return &Application{
-		Bot:            bot,
-		DB:             db,
-		Logger:         logger,
-		Config:         config,
-		UpdatesChannel: updatesChannel,
+		Bot:    bot,
+		DB:     db,
+		Logger: logger,
+		Config: cfg,
 		Stripe: struct {
 			PublishableKey string
 			SecretKey      string
 		}{
-			PublishableKey: os.Getenv("STRIPE_PUBLISHABLE_KEY"),
-			SecretKey:      os.Getenv("STRIPE_SECRET_KEY"),
-		},
+			PublishableKey: os.Getenv("STRIPE_PUBLIC_KEY"),
+			SecretKey:      os.Getenv("STRIPE_SECRET_KEY")},
 		Spoonocular: struct {
 			ApiKey string
 		}{
@@ -147,49 +104,108 @@ func NewApplication(bot *tgbotapi.BotAPI, db *models.DatabaseModel, logger *log.
 	}
 }
 
+// Start is a handler for /start command
 func (App *Application) Start(upd tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, "MindBoost Pro is your personal companion for self-improvement and personal growth. Unlock your potential, enhance your well-being, and achieve your goals with our comprehensive range of tools, resources, and expert guidance. Whether you're seeking motivation, mindfulness, or mastery, MindBoost Pro is here to empower you on your journey to becoming the best version of yourself.")
+	App.AboutAuthor(upd)
+	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, "I am glad to see you here! Hope this bot will help in your journey to a better life!")
 	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error creating message: %v\n", err)
+		App.Logger.Printf("error sending message: %v\n", err)
+	}
+	err := App.DB.SaveMessage(upd)
+	if err != nil {
+		App.Logger.Printf("error saving message into database: %v\n", err)
 		return
 	}
 }
 
+func (App *Application) Help(upd tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, "Help")
+	if _, err := App.Bot.Send(msg); err != nil {
+		App.Logger.Printf("error sending message: %v\n", err)
+	}
+	err := App.DB.SaveMessage(upd)
+	if err != nil {
+		App.Logger.Printf("error saving message into database: %v\n", err)
+		return
+	}
+}
+
+func (App *Application) AboutAuthor(update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+	msg.Text = `My name is Oleksandr Matviienko, link to my social medias you can find at https://werniq.github.io
+				This 6-months I have gained ~15 kilograms of clean muscle mass and I want to share my experience with you.
+				The main purpose of this bot is to help you to achieve your goals in fitness and health.
+				It will motivate you through the day and will help you to track your progress.
+				If you will listen to his advices, you will be able to achieve your goals in fitness and health.
+				A bit about those habits.
+					1. Meditation. It will help you to calm down and to focus on your goals. One time a day you should take a deep breath, calm down, and think about your goals. It will help you to stay motivated.
+					2. Drink water. It will help you to stay hydrated and to keep your body in a good shape. As well as it will your cognitive abilities.
+					3. Sleep. It will help you to recover after a hard day and to stay productive during the day.
+					4. Exercise. It will help you to stay in a good shape and to keep your body healthy. Exercising creates some discipline in your life and it will help you to achieve your goals.
+					5. Reading. Reading benefits include acquiring knowledge, stimulating the mind, expanding vocabulary, improving focus, reducing stress, fostering empathy, enhancing writing skills, boosting memory, stimulating imagination, and promoting personal growth.
+				Hope, that this bot will help you to become more disciplined, organized, healthy and motivated`
+
+	if _, err := App.Bot.Send(msg); err != nil {
+		App.Logger.Printf("error sending message: %v\n", err)
+	}
+	err := App.DB.SaveMessage(update)
+	if err != nil {
+		App.Logger.Printf("error saving message into database: %v\n", err)
+		return
+	}
+}
+
+// Default is a default handler for all commands that are not implemented
 func (App *Application) Default(upd tgbotapi.Update) {
 	msg := tgbotapi.NewMessage(upd.Message.Chat.ID, "I don't know what to do with this command")
 	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error creating message: %v\n", err)
+		App.Logger.Printf("error sending message: %v\n", err)
+	}
+	err := App.DB.SaveMessage(upd)
+	if err != nil {
+		App.Logger.Printf("error saving message into database: %v\n", err)
 		return
 	}
 }
 
+// BotConfiguration is a handler for /configure command
 func (App *Application) BotConfiguration(upd tgbotapi.Update) {
 	var userBotConfiguration models.UserBotConfiguration
-	userBotConfiguration.Step = 1
+	userBotConfiguration.Step = 0
 
 	message := upd.Message
 	chatID := message.Chat.ID
 
 	userBotConfiguration.UserId = message.From.ID
 
-	state, exists := states[chatID]
+	state, exists := ConfigureStates[chatID]
 	if !exists {
-		state = models.UserBotConfiguration{}
-		states[chatID] = state
+		state = userBotConfiguration
+		ConfigureStates[chatID] = state
 	}
 
 	msg := tgbotapi.NewMessage(chatID, "")
 
 	switch state.Step {
-	case 1:
+	case 0:
 		msg.Text = "How do you want me to call you?"
-		App.Bot.Send(msg)
-		state.Step++
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("error sending message: %v\n", err)
+			return
+		}
+		state.Step = 2
+		ConfigureStates[chatID] = state
 	case 2:
 		state.Username = message.Text
+		_, err := App.Bot.Send(msg)
 		msg.Text = "Certainly! Next, what is your gender?"
-		App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 3:
 		if message.Text == "m" || message.Text == "M" {
 			state.Gender = "M"
@@ -198,73 +214,139 @@ func (App *Application) BotConfiguration(upd tgbotapi.Update) {
 			state.Gender = "F"
 		}
 		msg.Text = "Great! How old are you?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 4:
 		state.Age, _ = strconv.Atoi(message.Text)
 		msg.Text = "What is your weight?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 5:
 		state.Weight, _ = strconv.ParseFloat(message.Text, 32)
 		msg.Text = "What is your height?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 6:
 		state.Height, _ = strconv.ParseFloat(message.Text, 32)
 		msg.Text = "What is your preferred physical activity?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 7:
 		state.PreferredPhysicalActivity = message.Text
 		msg.Text = "How many times a week do you workout?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 8:
 		state.WorkoutCount, _ = strconv.Atoi(message.Text)
 		msg.Text = "How many pages do you read a month?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 9:
 		state.BooksCount, _ = strconv.Atoi(message.Text)
 		msg.Text = "What supplements do you prefer? Or what supplements would you like to try? "
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 10:
 		state.PreferringSupplements = message.Text
 		msg.Text = "What habits would you like to acquire?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 11:
 		state.HabitsToAcquire = message.Text
 		msg.Text = "What news categories are you interested in? If you are not interested in news, just type 'none'."
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 12:
 		if message.Text == "none" {
 			msg.Text = "What time do you usually wake up?"
-			App.Bot.Send(msg)
+			_, err := App.Bot.Send(msg)
+			if err != nil {
+				App.Logger.Printf("Error sending message: %v\n", err)
+				return
+			}
 			state.Step++
+			ConfigureStates[chatID] = state
 			return
 		}
 		state.NewsCategories = message.Text
 		msg.Text = "What time do you usually wake up?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 13:
 		state.WakeUpTime, _ = time.Parse("15:04", message.Text)
 		msg.Text = "Last question! What time do you usually go to bed?"
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		state.Step++
+		ConfigureStates[chatID] = state
 	case 14:
 		state.BedTime, _ = time.Parse("15:04", message.Text)
 		msg.Text = "Thank you for your answers! I will send you a message every day to remind you to drink water, go to bed at time you provided, send you message at your wake up time, do physical exercises, and meditate. I will also send you news articles that you might be interested in. If you want to change your answers, you should re-configure bot from start."
-		App.Bot.Send(msg)
+		_, err := App.Bot.Send(msg)
+
+		if err != nil {
+			App.Logger.Printf("Error sending message: %v\n", err)
+			return
+		}
 		return
 	}
 }
 
-// ChangePreferableMeditationTime changes preferable meditation time for user
+// ChangePreferableMeditationTime is a handler for /change_meditation_time command
 func (App *Application) ChangePreferableMeditationTime(upd tgbotapi.Update) {
 	args := strings.Split(upd.Message.Text, " ")
 	inputedTime := args[1]
@@ -339,6 +421,13 @@ func (App *Application) ChangePreferableExerciseTime(upd tgbotapi.Update) {
 	App.Bot.Send(msg)
 }
 
+// WalkingReminder sends message to user if it's time to go for a walk
+func (App *Application) WalkingReminder(upd tgbotapi.Update) {
+	if time.Now().Hour() == 12 && time.Now().Minute() == 30 {
+		App.Bot.Send(tgbotapi.NewMessage(upd.Message.Chat.ID, "It's time to go for a walk!"))
+	}
+}
+
 // ChangePreferableSleepingTime changes preferable sleeping time for user
 func (App *Application) ChangePreferableSleepingTime(upd tgbotapi.Update) {
 	args := strings.Split(upd.Message.Text, " ")
@@ -391,7 +480,7 @@ func (App *Application) ChangePreferableWakeUpTime(update tgbotapi.Update) {
 
 // DailyWaterReminder sends a message to the user with a reminder to drink water
 func (App *Application) DailyWaterReminder(channelId int64) {
-	if time.Now().Hour()%4 == 0 && time.Now().Hour() < 22 && time.Now().Hour() > 7 && time.Now().Minute() == 0 {
+	if time.Now().Hour()%4 == 0 && time.Now().Hour() < 22 && time.Now().Hour() > 7 && time.Now().Minute() == 0 && time.Now().Second() == 0 {
 		msg := tgbotapi.NewMessage(channelId, "Don't forget to drink water today!")
 		if _, err := App.Bot.Send(msg); err != nil {
 			App.Logger.Printf("error sending message: %v\n", err)
@@ -404,11 +493,12 @@ func (App *Application) DailyWaterReminder(channelId int64) {
 func (App *Application) DailySleepReminder(channelId int64) {
 	// TODO: add sleep recommendations
 	// TODO: add user preferable time for sleep, and send message exactly at that time
-
-	msg := tgbotapi.NewMessage(channelId, "Don't forget to sleep well today!")
-	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error sending message: %v\n", err)
-		return
+	if time.Now().Hour() == 22 && time.Now().Minute() == 30 && time.Now().Second() == 0 {
+		msg := tgbotapi.NewMessage(channelId, "Don't forget to sleep well today!")
+		if _, err := App.Bot.Send(msg); err != nil {
+			App.Logger.Printf("error sending message: %v\n", err)
+			return
+		}
 	}
 }
 
@@ -416,20 +506,23 @@ func (App *Application) DailySleepReminder(channelId int64) {
 func (App *Application) DailyMeditationReminder(channelId int64) {
 	// TODO: add meditation recommendations
 	// TODO: add user preferable time for meditation, and send message exactly at that time
-
-	msg := tgbotapi.NewMessage(channelId, "Don't forget to meditate today!")
-	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error sending message: %v\n", err)
-		return
+	if time.Now().Hour() == 7 && time.Now().Minute() == 30 && time.Now().Second() == 0 && time.Now().Second() == 0 {
+		msg := tgbotapi.NewMessage(channelId, "Don't forget to meditate today!")
+		if _, err := App.Bot.Send(msg); err != nil {
+			App.Logger.Printf("error sending message: %v\n", err)
+			return
+		}
 	}
 }
 
 // DailyReadingReminder sends a message to the user with a reminder to read
 func (App *Application) DailyReadingReminder(channelId int64) {
-	msg := tgbotapi.NewMessage(channelId, "Don't forget to read today!")
-	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error sending message: %v\n", err)
-		return
+	if time.Now().Hour() == 15 && time.Now().Minute() == 30 && time.Now().Second() == 0 {
+		msg := tgbotapi.NewMessage(channelId, "Don't forget to read today!")
+		if _, err := App.Bot.Send(msg); err != nil {
+			App.Logger.Printf("error sending message: %v\n", err)
+			return
+		}
 	}
 }
 
@@ -437,16 +530,28 @@ func (App *Application) DailyReadingReminder(channelId int64) {
 func (App *Application) DailyExerciseReminder(channelId int64) {
 	// TODO: add exercise plans and recommendations
 	// TODO: add user preferable time for training, create custom plan, and send message exactly at that time
-
-	msg := tgbotapi.NewMessage(channelId, "Don't forget to exercise today!")
-	if _, err := App.Bot.Send(msg); err != nil {
-		App.Logger.Printf("error sending message: %v\n", err)
-		return
+	if time.Now().Hour() == 12 && time.Now().Minute() == 30 && time.Now().Second() == 0 {
+		msg := tgbotapi.NewMessage(channelId, "Don't forget to exercise today!")
+		if _, err := App.Bot.Send(msg); err != nil {
+			App.Logger.Printf("error sending message: %v\n", err)
+			return
+		}
 	}
 }
 
 // DailyMorningMotivationalQuote sends a message to the user with a motivational quote
-func (App *Application) DailyMorningMotivationalQuote(channelId int64) {
+func (App *Application) DailyMorningMotivationalQuote(channelId, userId int64) {
+	var ok bool
+	var err error
+	if ok, err = App.DB.UserExists(userId); err != nil {
+		App.Logger.Printf("error checking if user exists: %v\n", err)
+		return
+	}
+	if !ok {
+		App.Bot.Send(tgbotapi.NewMessage(channelId, "You are not registered. Please, use /setup command to register."))
+		return
+	}
+
 	wakeUpTime, err := App.DB.GetUserWakeupTime(channelId)
 	if err != nil {
 		App.Bot.Send(tgbotapi.NewMessage(channelId, "Something went wrong. Please, try again later."))
@@ -481,6 +586,9 @@ func (App *Application) ManuallySendExerciseRecommendations(update tgbotapi.Upda
 			tgbotapi.NewInlineKeyboardButtonData("🥊Triceps", "triceps"),
 			tgbotapi.NewInlineKeyboardButtonData("🦾Biceps", "biceps"),
 		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🍑Glutes", "glutes"),
+		),
 	)
 	msg.ReplyMarkup = keyboard
 	_, err := App.Bot.Send(msg)
@@ -492,7 +600,7 @@ func (App *Application) ManuallySendExerciseRecommendations(update tgbotapi.Upda
 func (App *Application) RetrieveExerciseRecommendations(update tgbotapi.Update) {
 	callbackData := update.CallbackQuery.Data
 
-	if callbackData == "chest" || callbackData == "back" || callbackData == "legs" || callbackData == "shoulders" || callbackData == "triceps" || callbackData == "biceps" {
+	if callbackData == "glutes" || callbackData == "chest" || callbackData == "back" || callbackData == "legs" || callbackData == "shoulders" || callbackData == "triceps" || callbackData == "biceps" {
 		switch callbackData {
 
 		case "chest":
@@ -597,6 +705,21 @@ func (App *Application) RetrieveExerciseRecommendations(update tgbotapi.Update) 
 			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, text)
 			_, _ = App.Bot.Send(msg)
 
+		case "glutes":
+			exercise, err := App.DB.GetOneRandomExercise("glutes")
+			if err != nil {
+				App.Logger.Printf("error getting random exercise: %v\n", err)
+				return
+			}
+
+			text := fmt.Sprintf(`
+							One of the best exercises for glutes is:
+								%s	\n
+								Technique for this exercise: %s
+								Video: %s		
+						`, exercise.Title, exercise.Technique, exercise.VideoURI)
+			msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, text)
+			_, _ = App.Bot.Send(msg)
 		}
 	}
 	editMsg := tgbotapi.NewEditMessageReplyMarkup(update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Message.MessageID, tgbotapi.InlineKeyboardMarkup{})
@@ -639,8 +762,8 @@ func (App *Application) ManuallySendRecommendationsForMentalHealth(update tgbota
 // SendSupplementsRecommendations is function which sends recommendations for intake supplements based on category
 // provided by user
 func (App *Application) SendSupplementsRecommendations(update tgbotapi.Update) {
-	if time.Now().Hour() == 9 && time.Hour.Minutes() == 0 {
-		category := strings.TrimPrefix("/supplements", update.Message.Text)
+	category := strings.TrimPrefix("/supplements ", update.Message.Text)
+	if utils.StringInArray(category, AvaliableSupplementCategories) == false {
 		supplements, err := utils.RequestToIHerb(category)
 		if err != nil {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, err.Error())
@@ -658,6 +781,23 @@ func (App *Application) SendSupplementsRecommendations(update tgbotapi.Update) {
 		}
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
 		_, _ = App.Bot.Send(msg)
+	} else {
+		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Please provide valid category, Available categories you can view by typing /supplement-categories"))
+	}
+}
+
+// ListAvailableSupplementCategories is function which sends list of available categories for supplements
+func (App *Application) ListAvailableSupplementCategories(update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+	text := "Available categories: \n"
+	for i := 0; i <= len(AvaliableSupplementCategories)-1; i++ {
+		text += fmt.Sprintf("%s \n", AvaliableSupplementCategories[i])
+	}
+
+	_, err := App.Bot.Send(msg)
+	if err != nil {
+		App.Logger.Printf("error sending message: %v\n", err)
+		return
 	}
 }
 
@@ -695,21 +835,29 @@ func (App *Application) CreateCustomReminder(update tgbotapi.Update) {
 
 // CreateCustomSupplementIntakePlan function will help user to choose
 func (App *Application) CreateCustomSupplementIntakePlan(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "What categories of supplements would you like to take? Please, input 1 by 1 \n Here is list: \n")
-	for i := 0; i <= len(AvaliableSupplementCategories)-1; i++ {
-		msg.Text += AvaliableSupplementCategories[i] + "\n"
+	if utils.StringInArray(strings.TrimPrefix(update.Message.Text, "/supplements-plan "), AvaliableSupplementCategories) == false {
+		fmt.Println(strings.TrimPrefix(update.Message.Text, "/supplements-plan"))
+
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "What categories of supplements would you like to take? Please, input 1 by 1 \n Here is list: \n")
+		for i := 0; i <= len(AvaliableSupplementCategories)-1; i++ {
+			msg.Text += AvaliableSupplementCategories[i] + "\n\t\t"
+		}
+
+		_, _ = App.Bot.Send(msg)
+		return
 	}
 
-	_, _ = App.Bot.Send(msg)
+	category := strings.TrimPrefix(update.Message.Text, "/supplements-plan")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
-	if utils.VerifyCategory(update.Message.Text) {
-		items, err := utils.RequestToIHerb(update.Message.Text)
+	if utils.VerifyCategory(category) {
+		items, err := utils.RequestToIHerb(category)
 		if err != nil {
 			msg.Text = "something went wrong. please, try again later"
 			_, _ = App.Bot.Send(msg)
 			return
 		}
-		msg.Text = ""
+
 		for i := 0; i <= len(items)-1; i++ {
 			msg.Text += "Title: " + items[i].Title + "\n"
 			msg.Text += "Price: " + items[i].Price + "\n"
@@ -717,69 +865,87 @@ func (App *Application) CreateCustomSupplementIntakePlan(update tgbotapi.Update)
 		}
 		_, _ = App.Bot.Send(msg)
 		return
-	} else {
-		msg.Text = ""
-		msg.Text = "please, choose from categories"
-		for i := 0; i <= len(AvaliableSupplementCategories)-1; i++ {
-			msg.Text += AvaliableSupplementCategories[i] + "\n"
-		}
-		return
 	}
 }
 
 // GenerateWorkoutForParticularMuscleGroup creates workout for this muscle groups:
 // []string{"back", "biceps", "chest", "triceps", "legs", "shoulders"}
 func (App *Application) GenerateWorkoutForParticularMuscleGroup(update tgbotapi.Update) {
-	muscle := strings.Split(update.Message.Text, " ")
-	muscle = muscle[1:]
-	count := muscle[1]
+	args := strings.Split(update.Message.Text, " ")
+	if len(args) <= 2 {
+		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "please, provide muscle group and count of exercises you want to generate"))
+		return
+	}
+	count := args[2]
+	m := args[1]
+	if utils.StringInArray(m, muscles) == false {
+		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Please, provide valid muscle group."))
+		return
+	}
 
 	c, err := strconv.Atoi(count)
 	if err != nil {
 		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error converting"+count+"to int"))
 		return
 	}
-	exercises, err := App.DB.GenerateXRandomExercises(muscle[0], c)
+	exercises, err := App.DB.GenerateXRandomExercises(m, c)
 	if err != nil {
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error generating workouts"))
+		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error generating workouts"+err.Error()))
 		return
+	}
+
+	if len(exercises) < 2 {
+		exercises, err = App.DB.GenerateXRandomExercises(m, c)
+		if err != nil {
+			App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error generating workouts"))
+			return
+		}
 	}
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 	for i := 0; i <= len(exercises)-1; i++ {
-		msg.Text = fmt.Sprintf("%s \n %s \n %s \n", exercises[i].Title, exercises[i].Technique, exercises[i].VideoURI)
+		msg.Text += fmt.Sprintf("%s \n %s \n %s \n \n\n", exercises[i].Title, exercises[i].Technique, exercises[i].VideoURI)
 	}
 
 	_, _ = App.Bot.Send(msg)
 }
 
-// CreateWeekTrainingPlan actually creates training plan for the whole week!! <33
+// CreateWeekTrainingPlan creates a training plan for the whole week.
 func (App *Application) CreateWeekTrainingPlan(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+	chatID := update.Message.Chat.ID
+
 	workouts := []string{"back", "biceps", "chest", "triceps", "legs", "shoulders"}
-	for i := 0; i < len(workouts); i = i + 2 {
-		exercises, err := App.DB.GenerateXRandomExercises(workouts[i], 4)
-		if err != nil {
-			msg.Text = "something went wrong while generating workout. please, try again later"
-			_, _ = App.Bot.Send(msg)
-			return
-		}
-		msg.Text += "Exercises for " + workouts[i] + workouts[i+1]
-		for i := 0; i <= len(exercises)-1; i++ {
-			msg.Text += fmt.Sprintf("%s \n %s \n %s \n", exercises[i].Title, exercises[i].Technique, exercises[i].VideoURI)
-		}
 
-		exercises, err = App.DB.GenerateXRandomExercises(workouts[i+1], 3)
+	for i := 0; i+1 < len(workouts); i = i + 2 {
+		// Generate exercises for the first workout
+		exercises1, err := App.DB.GenerateXRandomExercises(workouts[i], 4)
 		if err != nil {
-			msg.Text = "something went wrong while generating workout. please, try again later"
-			_, _ = App.Bot.Send(msg)
+			msg := tgbotapi.NewMessage(chatID, "Something went wrong while generating the workout. Please try again later."+err.Error())
+			App.Bot.Send(msg)
 			return
 		}
 
-		for i := 0; i <= len(exercises)-1; i++ {
-			msg.Text += fmt.Sprintf("%s \n %s \n %s \n", exercises[i].Title, exercises[i].Technique, exercises[i].VideoURI)
+		msg := tgbotapi.NewMessage(chatID, fmt.Sprintf("Exercises for %s and %s", workouts[i], workouts[i+1]))
+		App.Bot.Send(msg)
+		// Append exercises for the first workout to the message
+		for _, exercise := range exercises1 {
+			msg.Text = fmt.Sprintf("%s \n %s \n %s \n\n", exercise.Title, exercise.Technique, exercise.VideoURI)
+			App.Bot.Send(msg)
 		}
-		_, _ = App.Bot.Send(msg)
+
+		// Generate exercises for the second workout
+		exercises2, err := App.DB.GenerateXRandomExercises(workouts[i+1], 3)
+		if err != nil {
+			msg := tgbotapi.NewMessage(chatID, "Something went wrong while generating the workout. Please try again later."+err.Error())
+			App.Bot.Send(msg)
+			return
+		}
+
+		// Append exercises for the second workout to the message
+		for _, exercise := range exercises2 {
+			msg.Text = fmt.Sprintf("%s\n%s\n%s\n\n", exercise.Title, exercise.Technique, exercise.VideoURI)
+			App.Bot.Send(msg)
+		}
 	}
 }
 
@@ -883,28 +1049,22 @@ func (App *Application) CreateCustomMotivationalReminder(update tgbotapi.Update)
 	_, _ = App.Bot.Send(msg)
 }
 
+// CreateCustomMotivation function saves user answer to the question 'What is your motivation?'
 func (App *Application) CreateCustomMotivation(update tgbotapi.Update) {
-	m, err := App.DB.RetrieveLastUserMessage(update.Message.From.ID)
+	// if command := /create-custom-motivation  -> create new custom motivation
+	m := update.Message
+	reason := m.Text
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
+
+	err := App.DB.SaveUserCustomMotivation(update.Message.From.ID, reason)
 	if err != nil {
-		msg.Text = "Error retrieving last user message. Please, try again later."
-		App.Bot.Send(msg)
-		return
-	}
-
-	if update.Message.ReplyToMessage.MessageID == m.MessageId {
-		reason := m.Text
-
-		err = App.DB.SaveUserCustomMotivation(update.Message.From.ID, reason)
-		if err != nil {
-			msg.Text = "Error saving your motivation. Please, try again later."
-			App.Bot.Send(msg)
-		}
-
-		msg.Text = "Your motivation has been saved. Thank you!"
+		msg.Text = "Error saving your motivation. Please, try again later."
 		App.Bot.Send(msg)
 	}
+
+	msg.Text = "Your custom motivation has been saved. Thank you!"
+	App.Bot.Send(msg)
 }
 
 // RemindForWhatItIsFor functions periodically sends message to user for motivating him/her
@@ -936,53 +1096,85 @@ func (App *Application) RequestToUploadChallenge(update tgbotapi.Update) {
 			tgbotapi.NewInlineKeyboardButtonData("❌Deny", "d"),
 		),
 	)
+
 	msg.ReplyMarkup = keyboard
 	_, _ = App.Bot.Send(msg)
 
-	updates := App.UpdatesChannel
-
-	for upd := range updates {
-		if upd.CallbackQuery != nil && upd.Message.Chat.ID == adminId {
-			callbackData := upd.CallbackQuery.Data
-
-			switch callbackData {
-			case "v":
-				err = App.DB.UploadChallenge(challenge)
-				if err != nil {
-					App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Error uploading challenge. Please, report error using command /report <issue> "))
-					return
-				}
-			case "d":
-				App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Challenge has been denied."))
-			}
-		}
+	err = App.DB.ChallengeUploadRequest(update.Message.From.ID, challenge)
+	if err != nil {
+		App.Logger.Printf("error uploading challenge request: %s", err.Error())
+		return
 	}
+}
+
+// HandleChallengeRequest function handles challenge request
+func (App *Application) HandleChallengeRequest(update tgbotapi.Update) {
+	if update.CallbackQuery.Data == "v" {
+		// now we need to get challenge from database
+		userId := update.CallbackQuery.From.ID
+		challenge, err := App.DB.GetChallengeUploadRequest(userId)
+		if err != nil {
+			App.Logger.Printf("error retrieving challange from request_challenge table: %s", err.Error())
+			return
+		}
+
+		App.ApproveChallengeRequest(userId, challenge)
+	} else if update.CallbackQuery.Data == "d" {
+		userId := update.CallbackQuery.From.ID
+		challenge, err := App.DB.GetChallengeUploadRequest(userId)
+		if err != nil {
+			App.Logger.Printf("error retrieving challange from request_challenge table: %s", err.Error())
+			return
+		}
+
+		App.DenyChallengeRequest(userId, challenge)
+	}
+}
+
+// ApproveChallengeRequest function approves challenge request
+func (App *Application) ApproveChallengeRequest(userId int64, challenge string) {
+	err := App.DB.UploadChallenge(challenge)
+	if err != nil {
+		App.Logger.Printf("error uploading challenge to database: %s", err.Error())
+		return
+	}
+
+	msg := tgbotapi.NewMessage(userId, "Your challenge"+challenge+"has been approved. Thank you for your contribution to this bot. ")
+	App.Bot.Send(msg)
+}
+
+// DenyChallengeRequest function denies challenge request
+func (App *Application) DenyChallengeRequest(userId int64, challenge string) {
+	// assume that update.CallbackQuery.Data == "d" -> deny
+	err := App.DB.DeleteChallengeRequest(userId)
+	if err != nil {
+		App.Logger.Printf("error deleting challenge request: %s", err.Error())
+		return
+	}
+
+	msg := tgbotapi.NewMessage(userId, "Your challenge"+challenge+"has been denied. Please, find new one and try one more time :) ")
+	App.Bot.Send(msg)
 }
 
 // CreateCustomChallenge creates request
 func (App *Application) CreateCustomChallenge(update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, `
-			Please, send reply to this message with your challenge.
-			Example: 'Do 10 push-ups every day' or 'Do not eat sweets for a week'`)
+	// if command := /create-custom-challenge  -> create new custom challenge
+	challenge := strings.TrimPrefix(update.Message.Text, "/create-custom-challenge")
 
-	_, err := App.Bot.Send(msg)
-	if err != nil {
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Something went wrong. Please, try again later."))
-		return
-	}
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 
-	App.Upda
-
-	var challenge string
-
-	err = App.DB.SaveUserCustomChallenge(update.Message.From.ID, challenge)
+	err := App.DB.SaveUserCustomChallenge(update.Message.From.ID, challenge)
 	if err != nil {
 		msg.Text = "Error saving your challenge. Please, try again later."
 		App.Bot.Send(msg)
 	}
 
-	msg.Text = "Your challenge has been saved. Thank you!"
-	App.Bot.Send(msg)
+	msg.Text = "Your custom challenge has been saved. Thank you!"
+	_, err = App.Bot.Send(msg)
+	if err != nil {
+		App.Logger.Printf("error sending message: %s", err.Error())
+		return
+	}
 }
 
 // GetCustomUserChallenge retrieves random user custom challenge
@@ -993,7 +1185,7 @@ func (App *Application) GetCustomUserChallenge(update tgbotapi.Update) {
 		return
 	}
 
-	App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, challenge))
+	App.Bot.Send(App.TranslateToUkrainian(tgbotapi.NewMessage(update.Message.Chat.ID, challenge)))
 }
 
 // SendChallenges sends challenges to users
@@ -1001,11 +1193,11 @@ func (App *Application) SendChallenges(update tgbotapi.Update) {
 	if time.Now().Hour() == 11 && time.Now().Minute() == 0 {
 		challenge, err := App.DB.RetrieveUserRandomCustomChallenge(update.Message.From.ID)
 		if err != nil {
-			App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "Error getting challenge. Please, report error using command /report <issue> "))
+			App.Bot.Send(App.TranslateToUkrainian(tgbotapi.NewMessage(update.Message.Chat.ID, "Error getting challenge. Please, report error using command /report <issue> ")))
 			return
 		}
 
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, challenge))
+		App.Bot.Send(App.TranslateToUkrainian(tgbotapi.NewMessage(update.Message.Chat.ID, challenge)))
 	}
 }
 
@@ -1013,7 +1205,7 @@ func (App *Application) SendChallenges(update tgbotapi.Update) {
 func (App *Application) SendSleepingRecommendations(update tgbotapi.Update) {
 	if time.Now().Hour() == 20 && time.Now().Minute() == 0 {
 		num := rand.Intn(len(sleepingRecommendations))
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, sleepingRecommendations[num]))
+		App.Bot.Send(App.TranslateToUkrainian(tgbotapi.NewMessage(update.Message.Chat.ID, sleepingRecommendations[num])))
 	}
 }
 
@@ -1021,7 +1213,7 @@ func (App *Application) SendSleepingRecommendations(update tgbotapi.Update) {
 func (App *Application) SendRecommendationsForMentalHealth(update tgbotapi.Update) {
 	if time.Now().Hour() == 20 && time.Now().Minute() == 0 {
 		num := rand.Intn(len(mentalHealthRecommendations))
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, mentalHealthRecommendations[num]))
+		App.Bot.Send(App.TranslateToUkrainian(tgbotapi.NewMessage(update.Message.Chat.ID, mentalHealthRecommendations[num])))
 	}
 }
 
@@ -1057,89 +1249,79 @@ func (App *Application) AddSubscriptionOnMorningNews(update tgbotapi.Update) {
 	)
 
 	msg.ReplyMarkup = keyboard
-
+	msg = App.TranslateToUkrainian(msg)
 	App.Bot.Send(msg)
+}
 
-	for update := range App.UpdatesChannel {
-		if update.CallbackQuery != nil {
-			m := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
-			data := update.CallbackQuery.Data
-			if data == "health" || data == "fitness" || data == "personal" || data == "growth" || data == "psychology" || data == "mindfulness" || data == "self-Care" || data == "motivation" || data == "productivity" || data == "happiness" || data == "relationships" || data == "career-development" || data == "leadership" || data == "education" || data == "self-Help" || data == "mental" || data == "well-being" {
-				err := App.DB.StoreNewsCategories(data, update.CallbackQuery.From.ID)
-				if err != nil {
-					msg.Text = "Error adding subscription. Please, try again later."
-					App.Bot.Send(msg)
-					return
-				}
-
-				m.Text = "Your subscription has been added. Thank you!"
-				App.Bot.Send(msg)
-				return
-			}
+// AddSubscriptionOnMorningNewsCallback adds subscription on morning news callback
+// TODO: implement function to actually send morning newsletter based on user preferences
+func (App *Application) AddSubscriptionOnMorningNewsCallback(update tgbotapi.Update) {
+	// assume that update.CallbackQuery.Data == "health" || or any available category from list
+	m := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
+	data := update.CallbackQuery.Data
+	if data == "health" || data == "fitness" || data == "personal" || data == "growth" || data == "psychology" || data == "mindfulness" || data == "self-Care" || data == "motivation" || data == "productivity" || data == "happiness" || data == "relationships" || data == "career-development" || data == "leadership" || data == "education" || data == "self-Help" || data == "mental" || data == "well-being" {
+		err := App.DB.StoreNewsCategories(data, update.CallbackQuery.From.ID)
+		if err != nil {
+			m.Text = "Error adding subscription. Please, try again later."
+			App.Bot.Send(m)
+			return
 		}
+
+		m.Text = "Your subscription has been added. Thank you!"
+		App.Bot.Send(m)
+		return
 	}
 }
 
-// CreateCustomMealPreparingPlan creates custom meal preparing plan
+// CreateCustomMealPreparingPlan requires few arguments from user to create custom meal preparing plan
 func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
-	// list available diets and ask user to choose one
-	// ask user to choose calories count
-	// ask user to choose timeFrame (day/week)
-	// + optional if user wants to exclude something (comma separated)
-
-	var config struct {
-		TimeFrame      string `json:"timeFrame"`
-		TargetCalories string `json:"targetCalories"`
-		Diet           string `json:"diet"`
-		Exclude        string `json:"exclude"`
+	config, exists := SpoonocularConfiguration[update.Message.From.ID]
+	if !exists {
+		config = models.SpoonocularConfiguration{}
+		SpoonocularConfiguration[update.Message.From.ID] = config
 	}
 
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "It is time to create your custom meal preparing plan. Please, answer the following questions: \n\n1. What is your target calories? (e.g. 2000)")
-	App.Bot.Send(msg)
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "2. What is your time frame? (day/week)")
 
-	for update := range App.UpdatesChannel {
-		if update.Message != nil {
-			if update.Message.Text != "" {
-				config.TargetCalories = update.Message.Text
-				break
-			}
-		}
+	if config.Step == 0 {
+		msg.Text = "It is time to create your custom meal preparing plan. Please, answer the following questions: \n\n1. What is your target calories? (e.g. 2000)"
+		App.Bot.Send(msg)
+		config.Step++
+		SpoonocularConfiguration[update.Message.From.ID] = config
+		return
 	}
 
-	msg.Text = "2. What is your time frame? (day/week)"
-	App.Bot.Send(msg)
-
-	for update := range App.UpdatesChannel {
-		if update.Message != nil {
-			if update.Message.Text != "" {
-				config.TimeFrame = update.Message.Text
-				break
-			}
-		}
+	if config.Step == 1 {
+		config.TargetCalories = update.Message.Text
+		msg.Text = "2. What is your time frame? (day/week)"
+		App.Bot.Send(msg)
+		config.Step++
+		SpoonocularConfiguration[update.Message.From.ID] = config
+		return
 	}
 
-	msg.Text = "3. What is your diet? (list of diets you can view by typing /diets)"
-	App.Bot.Send(msg)
-
-	for update := range App.UpdatesChannel {
-		if update.Message != nil {
-			if update.Message.Text != "" {
-				config.Diet = update.Message.Text
-				break
-			}
-		}
+	if config.Step == 2 {
+		config.TimeFrame = update.Message.Text
+		msg.Text = "3. What is your diet? (list of diets you can view by typing /diets)"
+		App.Bot.Send(msg)
+		config.Step++
+		SpoonocularConfiguration[update.Message.From.ID] = config
+		return
 	}
 
-	msg.Text = "4. What do you want to exclude? (e.g. eggs, milk, nuts)"
-	App.Bot.Send(msg)
+	if config.Step == 3 {
+		config.Diet = update.Message.Text
+		msg.Text = "4. What do you want to exclude? (e.g. eggs, milk, nuts)"
+		App.Bot.Send(msg)
+		config.Step++
+		SpoonocularConfiguration[update.Message.From.ID] = config
+		return
+	}
 
-	for update := range App.UpdatesChannel {
-		if update.Message != nil {
-			if update.Message.Text != "" {
-				config.Exclude = update.Message.Text
-				break
-			}
-		}
+	if config.Step == 4 {
+		config.Exclude = update.Message.Text
+		msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /my-meal-plans to view it."
+		SpoonocularConfiguration[update.Message.From.ID] = config
 	}
 
 	// send request to spoonacular api
@@ -1159,47 +1341,91 @@ func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
 		uri += "&exclude=" + config.Exclude
 	}
 
-	meals, err := utils.CreateMealPreparingPlan(uri)
+	week, err := utils.CreateMealPreparingPlan(uri)
 	if err != nil {
 		msg.Text = "Error creating meal preparing plan. Please, try again later."
 		App.Bot.Send(msg)
 		return
 	}
 
-	for i, day := range meals.Days {
-		msg.Text = fmt.Sprintf("Day %d - %s\n", i+1, day.Day)
-		for _, item := range day.Items {
-			msg.Text += fmt.Sprintf("Meal: %s\n", item.Value.Title)
-			msg.Text += fmt.Sprintf("Servings: %d\n", item.Value.Servings)
-			msg.Text += fmt.Sprintf("ID: %d\n", item.Value.ID)
-			msg.Text += fmt.Sprintf("Image: %s\n", item.Value.Image)
-		}
+	err = App.DB.InsertMealPreparePlan(week, update.Message.From.ID)
+	if err != nil {
+		msg.Text = "Error inserting meal preparing plan. Please, try again later."
 		App.Bot.Send(msg)
+		return
 	}
+
+	msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /my-mealplans to view it."
+	App.Bot.Send(msg)
 }
 
-func ListMeals(mealPlan utils.MealPlan) {
-	for i, day := range mealPlan.Days {
-		fmt.Printf("Day %d - %s\n", i+1, day.Day)
-		for _, item := range day.Items {
-			if item.Type == "RECIPE" || item.Type == "MENU_ITEM" {
-				fmt.Sprintf("Meal: %s\n", item.Value.Title)
-				fmt.Sprintf("Servings: %d\n", item.Value.Servings)
-				fmt.Sprintf("ID: %d\n", item.Value.ID)
-				fmt.Sprintf("Image: %s\n", item.Value.Image)
-				fmt.Println("----------------------")
-			}
-		}
-		fmt.Println()
+// UserMealPlan executes when user types /my-mealplans
+func (App *Application) UserMealPlan(update tgbotapi.Update) {
+	week, err := App.DB.GetMealPlan(update.Message.From.ID)
+	if err != nil {
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error getting meal preparing plan. Please, try again later.")
+		App.Bot.Send(msg)
+		return
 	}
-}
 
-func (App *Application) CreateCustomHabit(update tgbotapi.Update)     {}
-func (App *Application) BuySubscription(update tgbotapi.Update)       {}
-func (App *Application) RemoveSubscription(update tgbotapi.Update)    {}
-func (App *Application) ManageUsers(update tgbotapi.Update)           {}
-func (App *Application) ManageSubscriptions(update tgbotapi.Update)   {}
-func (App *Application) ReceiveCryptoDonation(update tgbotapi.Update) {}
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Your meal preparing plan: \n\n Monday: ")
+	for _, meal := range week.Monday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Tuesday: "
+	for _, meal := range week.Tuesday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Wednesday: "
+	for _, meal := range week.Wednesday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Thursday: "
+	for _, meal := range week.Thursday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Friday: "
+	for _, meal := range week.Friday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Saturday: "
+	for _, meal := range week.Saturday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	msg.Text += "Sunday: "
+	for _, meal := range week.Sunday.Meals {
+		msg.Text += fmt.Sprintf("%s\n", meal.Title)
+		msg.Text += fmt.Sprintf("Ready in minutes: %d\n", meal.ReadyInMinutes)
+		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
+		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
+	}
+
+	App.Bot.Send(msg)
+}
 
 // GetDifferentDietInfo sends information about different diets
 func (App *Application) GetDifferentDietInfo(update tgbotapi.Update) {
@@ -1270,6 +1496,8 @@ func (App *Application) GetDifferentDietInfo(update tgbotapi.Update) {
 	App.Bot.Send(msg)
 }
 
-// Optional
-// author info
-// donations (crypto donations) + statistic
+// TranslateToUkrainian translates message to Ukrainian language
+func (App *Application) TranslateToUkrainian(message tgbotapi.MessageConfig) tgbotapi.MessageConfig {
+	message.Text = utils.TranslateToUkrainian(message.Text)
+	return message
+}
