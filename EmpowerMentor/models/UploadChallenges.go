@@ -1,5 +1,7 @@
 package models
 
+import "errors"
+
 var (
 	Challenges = []string{
 		"Take a cold shower",
@@ -105,6 +107,31 @@ var (
 	}
 )
 
+// TruncateTableChallenges function truncates table challenges
+func (m *DatabaseModel) TruncateTableChallenges() error {
+	stmt := `
+		TRUNCATE TABLE challenges;`
+
+	_, err := m.DB.Exec(stmt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *DatabaseModel) TruncateTableMotivationQuotes() error {
+	stmt := `
+		TRUNCATE TABLE motivation_quotes;`
+
+	_, err := m.DB.Exec(stmt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // UploadDifferentChallenges function inserts all prepared challenges to database
 func (m *DatabaseModel) UploadDifferentChallenges() error {
 	stmt := `
@@ -140,13 +167,33 @@ func (m *DatabaseModel) UploadChallenge(challenge string) error {
 	return nil
 }
 
+// GetChallengeUploadRequest returns challenge upload request
+func (m *DatabaseModel) GetChallengeUploadRequest(userId int64) (string, error) {
+	stmt := `
+			SELECT
+ 				challenge	
+			FROM
+		    	requested_challenges
+			where 
+			    user_ id = $1;
+		`
+
+	var challenge string
+	err := m.DB.QueryRow(stmt, userId).Scan(&challenge)
+	if err != nil {
+		return "", err
+	}
+
+	return challenge, nil
+}
+
 // ChallengeExists verifies if challenge with this text exists
 func (m *DatabaseModel) ChallengeExists(challenge string) (bool, error) {
 	stmt := `
 		SELECT 
 		    id
 		FROM 
-		    challenges 
+		    requested_challenges 
 		WHERE 
 		    challenge = $1;`
 
@@ -157,4 +204,82 @@ func (m *DatabaseModel) ChallengeExists(challenge string) (bool, error) {
 	}
 
 	return id > 0, nil
+}
+
+// UserRequestExists function is used to verify if user has already requested uploading challenge
+func (m *DatabaseModel) UserRequestExists(userId int64) error {
+	stmt := `
+		SELECT
+			id
+		FROM
+		    requested_challenges
+		WHERE
+		    user_id = $1;`
+
+	var id int
+	err := m.DB.QueryRow(stmt, userId).Scan(&id)
+	if err != nil {
+		return err
+	}
+	if id > 0 {
+		return errors.New("user already requested challenge")
+	}
+
+	return nil
+}
+
+func (m *DatabaseModel) DeleteChallengeRequest(userId int64) error {
+	stmt := `
+		DELETE FROM  
+		    requested_challenges
+		WHERE 
+		    user_id = $1;
+		`
+
+	_, err := m.DB.Exec(stmt, userId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ChallangeUploadRequest inserts custom challenge to database
+func (m *DatabaseModel) ChallengeUploadRequest(userId int64, challenge string) error {
+	stmt := `
+			INSERT INTO	
+	    		requested_challenges
+	    			(user_id, challenge)
+	    	VALUES
+	    		($1, $2);
+		`
+
+	_, err := m.DB.Exec(stmt, userId, challenge)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetRandomUploadChallengeRequest returns random upload challenge request from database
+func (m *DatabaseModel) GetRandomUploadChallengeRequest() (int64, string, error) {
+	stmt := `
+			SELECT
+				(user_id, challenge)
+			FROM
+				requested_challenges
+			ORDER BY
+				random()
+			LIMIT 1;
+		`
+
+	var challenge string
+	var userId int64
+	err := m.DB.QueryRow(stmt).Scan(&challenge, &userId)
+	if err != nil {
+		return 0, "", err
+	}
+
+	return userId, challenge, nil
 }

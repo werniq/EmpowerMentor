@@ -43,6 +43,28 @@ func (m *DatabaseModel) UserExists(userId int64) (bool, error) {
 	return false, nil
 }
 
+func (m *DatabaseModel) UserIsUsingBot(userId int64) (bool, error) {
+	stmt := `
+			SELECT 
+				COUNT(*)
+			FROM
+			    user_bot_configuration
+			WHERE
+			    user_id = $1`
+
+	var count int
+	err := m.DB.QueryRow(stmt, userId).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	if count > 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // consider add customer function instead of add user
 
 // IsAdmin function verifies if user is admin
