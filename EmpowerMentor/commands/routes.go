@@ -3,6 +3,8 @@ package commands
 import (
 	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"regexp"
+	"self-improvement-bot/commands/utils"
 	"strings"
 )
 
@@ -20,6 +22,9 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 			}
 		}
 
+		// Create a regular expression pattern for a four-digit number with the first digit as 1, 2, or 3
+		pattern := "^[1-3][0-9]{3}$"
+
 		// somehow I should track user responses to particular messages
 		// I need to create database table "messages", which will store user messages
 		if update.CallbackQuery != nil {
@@ -31,6 +36,14 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 				App.HandleChallengeRequest(update)
 			} else if update.CallbackQuery.Data == "health" || update.CallbackQuery.Data == "fitness" || update.CallbackQuery.Data == "personal" || update.CallbackQuery.Data == "psychology" || update.CallbackQuery.Data == "mindfulness" || update.CallbackQuery.Data == "self-Care" || update.CallbackQuery.Data == "motivation" || update.CallbackQuery.Data == "productivity" || update.CallbackQuery.Data == "happiness" || update.CallbackQuery.Data == "relationships" || update.CallbackQuery.Data == "career-development" || update.CallbackQuery.Data == "leadership" || update.CallbackQuery.Data == "education" || update.CallbackQuery.Data == "self-Help" || update.CallbackQuery.Data == "mental" || update.CallbackQuery.Data == "well-being" {
 				App.AddSubscriptionOnMorningNewsCallback(update)
+			} else if regexp.MustCompile(pattern).MatchString(update.CallbackQuery.Data) ||
+				update.CallbackQuery.Data == "day" ||
+				update.CallbackQuery.Data == "week" ||
+				update.CallbackQuery.Data == "month" ||
+				utils.StringInArray(update.CallbackQuery.Data, DietNames) ||
+				utils.StringInArray(update.CallbackQuery.Data, Allergens) {
+
+				App.CallbackMealPreparePlan(update)
 			}
 			return
 		}
@@ -58,9 +71,6 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 		switch command {
 		case "/start":
 			App.Start(update)
-
-		case "/default":
-			App.Default(update)
 
 		case "/changemeditationt":
 			App.ChangePreferableMeditationTime(update)
@@ -101,7 +111,7 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 		case "/gen":
 			App.GenerateWorkoutForParticularMuscleGroup(update)
 
-		case "/supplements-plan":
+		case "/supplementsplan":
 			App.CreateCustomSupplementIntakePlan(update)
 
 		case "/weektrainingplan":
@@ -119,7 +129,7 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 		case "/requesttouploadquote":
 			App.RequestToUploadChallenge(update)
 
-		case "/add-admin":
+		case "/addadmin":
 			App.AddAdmin(update)
 
 		case "/report":
@@ -148,6 +158,8 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 
 			// TODO: gen challenge
 
+		default:
+			App.Default(update)
 		}
 	})
 }
