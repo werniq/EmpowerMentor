@@ -133,6 +133,7 @@ func ConnectSpoonacular() (*SpoonacularConfig, error) {
 
 // CreateMealPreparingPlan creates a meal preparing plan
 func CreateMealPreparingPlan(uri string) (models.Week, error) {
+	// https://api.spoonacular.com/mealplanner/generate?apiKey=6483035d15ea4182b3fa0a8b95f87ef2
 	res, err := http.Get(uri)
 	if err != nil {
 		return models.Week{}, err

@@ -82,6 +82,36 @@ var (
 	ConfigureStates          = make(map[int64]models.UserBotConfiguration)
 	SpoonocularConfiguration = make(map[int64]models.SpoonocularConfiguration)
 	muscles                  = []string{"back", "chest", "biceps", "triceps", "shoulders", "legs", "glutes"}
+	DietNames                = []string{
+		"Gluten Free",
+		"Ketogenic",
+		"Vegetarian",
+		"Lacto-Vegetarian",
+		"Ovo-Vegetarian",
+		"Vegan",
+		"Pescetarian",
+		"Paleo",
+		"Primal",
+		"Low FODMAP",
+		"Whole30",
+	}
+	Allergens = []string{
+		"Milk",
+		"Eggs",
+		"Fish",
+		"Crustacean shellfish",
+		"Tree nuts",
+		"Peanuts",
+		"Wheat",
+		"Soybeans",
+		"Mustard",
+		"Sesame",
+		"Sulfites",
+		"Celery",
+		"Lupin",
+		"Mollusks",
+		"Gluten",
+	}
 )
 
 func NewApplication(bot *tgbotapi.BotAPI, db *models.DatabaseModel, logger *log.Logger, cfg Config) *Application {
@@ -1275,7 +1305,10 @@ func (App *Application) AddSubscriptionOnMorningNewsCallback(update tgbotapi.Upd
 
 // CreateCustomMealPreparingPlan requires few arguments from user to create custom meal preparing plan
 func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
-	config, exists := SpoonocularConfiguration[update.Message.From.ID]
+	var config models.SpoonocularConfiguration
+	var exists bool
+
+	config, exists = SpoonocularConfiguration[update.Message.From.ID]
 	if !exists {
 		config = models.SpoonocularConfiguration{}
 		SpoonocularConfiguration[update.Message.From.ID] = config
@@ -1283,45 +1316,139 @@ func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
 
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "2. What is your time frame? (day/week)")
 
-	if config.Step == 0 {
-		msg.Text = "It is time to create your custom meal preparing plan. Please, answer the following questions: \n\n1. What is your target calories? (e.g. 2000)"
-		App.Bot.Send(msg)
-		config.Step++
-		SpoonocularConfiguration[update.Message.From.ID] = config
-		return
+	msg.Text = "It is time to create your custom meal preparing plan. Please, answer the following questions: \n\n1. What is your target calories? (e.g. 2000)"
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("1500", "1500"),
+			tgbotapi.NewInlineKeyboardButtonData("1750", "1750"),
+			tgbotapi.NewInlineKeyboardButtonData("2000", "2000"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("2250", "2250"),
+			tgbotapi.NewInlineKeyboardButtonData("2500", "2500"),
+			tgbotapi.NewInlineKeyboardButtonData("3000", "3000"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("3250", "3250"),
+			tgbotapi.NewInlineKeyboardButtonData("3500", "3500"),
+		),
+	)
+
+	msg.ReplyMarkup = keyboard
+
+	App.Bot.Send(msg)
+	config.Step++
+	SpoonocularConfiguration[update.Message.From.ID] = config
+}
+
+func (App *Application) CallbackMealPreparePlan(update tgbotapi.Update) {
+	config, exists := SpoonocularConfiguration[update.CallbackQuery.From.ID]
+	if !exists {
+		config = models.SpoonocularConfiguration{}
+		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
 	}
+	msg := tgbotapi.NewMessage(update.CallbackQuery.Message.Chat.ID, "")
 
 	if config.Step == 1 {
-		config.TargetCalories = update.Message.Text
+		config.TargetCalories = update.CallbackQuery.Data
 		msg.Text = "2. What is your time frame? (day/week)"
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("day", "day"),
+				tgbotapi.NewInlineKeyboardButtonData("week", "week"),
+			),
+		)
+		msg.ReplyMarkup = keyboard
+
 		App.Bot.Send(msg)
 		config.Step++
-		SpoonocularConfiguration[update.Message.From.ID] = config
+		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
 		return
 	}
 
 	if config.Step == 2 {
-		config.TimeFrame = update.Message.Text
-		msg.Text = "3. What is your diet? (list of diets you can view by typing /diets)"
+		config.TimeFrame = update.CallbackQuery.Data
+		msg.Text = "3. What type of diet you want to follow?"
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[0], DietNames[0]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[1], DietNames[1]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[2], DietNames[2]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[3], DietNames[3]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[4], DietNames[4]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[5], DietNames[5]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[6], DietNames[6]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[7], DietNames[7]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[8], DietNames[8]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[9], DietNames[9]),
+				tgbotapi.NewInlineKeyboardButtonData(DietNames[10], DietNames[10]),
+			),
+		)
+
+		msg.ReplyMarkup = keyboard
 		App.Bot.Send(msg)
+
 		config.Step++
-		SpoonocularConfiguration[update.Message.From.ID] = config
+		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
 		return
 	}
 
 	if config.Step == 3 {
-		config.Diet = update.Message.Text
-		msg.Text = "4. What do you want to exclude? (e.g. eggs, milk, nuts)"
+		config.Diet = update.CallbackQuery.Data
+		msg.Text = "4. What do you want to exclude? (e.g. eggs, milk, nuts) P.S. For now, we support only those allergens: "
+		for _, v := range Allergens {
+			msg.Text += v + ", "
+		}
+
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[0], Allergens[0]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[1], Allergens[1]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[2], Allergens[2]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[3], Allergens[3]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[4], Allergens[4]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[5], Allergens[5]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[6], Allergens[6]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[7], Allergens[7]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[8], Allergens[8]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[9], Allergens[9]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[10], Allergens[10]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[11], Allergens[11]),
+			),
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[12], Allergens[12]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[13], Allergens[13]),
+				tgbotapi.NewInlineKeyboardButtonData(Allergens[14], Allergens[14]),
+			),
+		)
+		msg.ReplyMarkup = keyboard
+
 		App.Bot.Send(msg)
 		config.Step++
-		SpoonocularConfiguration[update.Message.From.ID] = config
+		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
 		return
 	}
 
 	if config.Step == 4 {
-		config.Exclude = update.Message.Text
+		config.Exclude = update.CallbackQuery.Data
 		msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /my-meal-plans to view it."
-		SpoonocularConfiguration[update.Message.From.ID] = config
+		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
+		config.Step++
 	}
 
 	// send request to spoonacular api
@@ -1329,6 +1456,7 @@ func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
 	if config.TimeFrame != "" {
 		uri += "&timeFrame=" + config.TimeFrame
 	}
+
 	if config.TargetCalories != "" {
 		uri += "&targetCalories=" + config.TargetCalories
 	}
@@ -1348,14 +1476,14 @@ func (App *Application) CreateCustomMealPreparingPlan(update tgbotapi.Update) {
 		return
 	}
 
-	err = App.DB.InsertMealPreparePlan(week, update.Message.From.ID)
+	_, err = App.DB.InsertWeekMealPreparePlan(week, update.CallbackQuery.From.ID)
 	if err != nil {
-		msg.Text = "Error inserting meal preparing plan. Please, try again later."
+		msg.Text = "Error inserting meal preparing plan. Please, try again later. " + err.Error()
 		App.Bot.Send(msg)
 		return
 	}
 
-	msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /my-mealplans to view it."
+	msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /mymealplans to view it."
 	App.Bot.Send(msg)
 }
 
