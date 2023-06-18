@@ -37,7 +37,7 @@ func (App *Application) BotConfiguration(upd tgbotapi.Update) {
 		state.Step = 2
 		ConfigureStates[chatID] = state
 	case 2:
-		state.Username = message.Text
+		 state.Username = message.Text
 		_, err := App.Bot.Send(msg)
 		msg.Text = "Certainly! Next, what is your gender?"
 		if err != nil {
