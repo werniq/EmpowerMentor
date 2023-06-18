@@ -136,7 +136,7 @@ func (App *Application) CallbackMealPreparePlan(update tgbotapi.Update) {
 			tgbotapi.NewInlineKeyboardRow(
 				tgbotapi.NewInlineKeyboardButtonData(Allergens[12], Allergens[12]),
 				tgbotapi.NewInlineKeyboardButtonData(Allergens[13], Allergens[13]),
-				tgbotapi.NewInlineKeyboardButtonData(Allergens[14], Allergens[14]),
+				tgbotapi.NewInlineKeyboardButtonData("None of above", "none"),
 			),
 		)
 		msg.ReplyMarkup = keyboard
@@ -150,13 +150,9 @@ func (App *Application) CallbackMealPreparePlan(update tgbotapi.Update) {
 	if config.Step == 4 {
 		config.Exclude = update.CallbackQuery.Data
 		msg.Text = "Thank you! Your custom meal preparing plan is ready. Please, type /my-meal-plans to view it."
-		SpoonocularConfiguration[update.CallbackQuery.From.ID] = config
-		config.Step++
 	}
+	App.Bot.Send(msg)
 
-	fmt.Println(App.Spoonocular.ApiKey)
-
-	// send request to spoonacular api
 	uri := "https://api.spoonacular.com/mealplanner/generate?apiKey=" + App.Spoonocular.ApiKey
 	if config.TimeFrame != "" {
 		uri += "&timeFrame=" + config.TimeFrame
@@ -170,11 +166,9 @@ func (App *Application) CallbackMealPreparePlan(update tgbotapi.Update) {
 		uri += "&diet=" + config.Diet
 	}
 
-	if config.Exclude != "" {
+	if config.Exclude != "none" {
 		uri += "&exclude=" + config.Exclude
 	}
-
-	fmt.Println(uri)
 
 	week, err := CreateMealPreparingPlan(uri)
 	if err != nil {
@@ -200,6 +194,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Monday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Monday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Monday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Monday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text = "Tuesday: "
@@ -209,6 +209,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Tuesday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Tuesday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Tuesday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Tuesday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text = "Wednesday: "
@@ -218,6 +224,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Wednesday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Wednesday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Wednesday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Wednesday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text = "Thursday: "
@@ -227,6 +239,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Thursday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Thursday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Thursday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Thursday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text += "Friday: "
@@ -236,6 +254,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Friday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Friday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Friday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Friday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text = "Saturday: "
@@ -245,6 +269,12 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Saturday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Saturday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Saturday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Saturday.Nutrients.Calories)
+
 	App.Bot.Send(msg)
 
 	msg.Text = "Sunday: "
@@ -254,6 +284,11 @@ func (App *Application) UserMealPlan(update tgbotapi.Update, week models.Week) {
 		msg.Text += fmt.Sprintf("Servings: %d\n", meal.Servings)
 		msg.Text += fmt.Sprintf("Source url: %s\n\n", meal.SourceURL)
 	}
+
+	msg.Text += fmt.Sprintf("Carbohydrates: %f\n", week.Sunday.Nutrients.Carbohydrates)
+	msg.Text += fmt.Sprintf("Protein: %f\n", week.Sunday.Nutrients.Protein)
+	msg.Text += fmt.Sprintf("Fat: %f\n", week.Sunday.Nutrients.Fat)
+	msg.Text += fmt.Sprintf("Calories: %f\n", week.Sunday.Nutrients.Calories)
 
 	App.Bot.Send(msg)
 }
@@ -325,4 +360,5 @@ func (App *Application) GetDifferentDietInfo(update tgbotapi.Update) {
 
 	msg.Text = fmt.Sprintf("Diet name: %s\nDescription: %s", dietName, desc)
 	App.Bot.Send(msg)
+
 }

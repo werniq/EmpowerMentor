@@ -40,7 +40,7 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 				update.CallbackQuery.Data == "week" ||
 				update.CallbackQuery.Data == "month" ||
 				StringInArray(update.CallbackQuery.Data, DietNames) ||
-				StringInArray(update.CallbackQuery.Data, Allergens) {
+				StringInArray(update.CallbackQuery.Data, append(Allergens, "none")) {
 
 				App.CallbackMealPreparePlan(update)
 			}
