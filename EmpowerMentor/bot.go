@@ -8,7 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"self-improvement-bot/commands"
+	"self-improvement-bot/commands/utils"
 	"self-improvement-bot/driver"
 	"self-improvement-bot/models"
 	"time"
@@ -103,7 +103,7 @@ func main() {
 		return
 	}
 
-	app := commands.NewApplication(bot, models.NewDatabaseModel(db), Logger, commands.Config(cfg))
+	app := utils.NewApplication(bot, models.NewDatabaseModel(db), Logger, utils.Config(cfg))
 
 	err = app.DB.UploadMotivationalQuotes()
 	if err != nil {

@@ -54,6 +54,7 @@ var (
 	}
 )
 
+// RetrieveCategories returns a slice of strings with all available categories
 func RetrieveCategories() []string {
 	return AvaliableCategories
 }

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"self-improvement-bot/models"
@@ -27,7 +28,6 @@ type SpoonacularConfig struct {
 type MealPlan struct {
 	Days []Day `json:"days"`
 }
-
 type Meal struct {
 	ID             int    `json:"id"`
 	ImageType      string `json:"imageType"`
@@ -44,6 +44,11 @@ type Nutrients struct {
 	Carbohydrates float64 `json:"carbohydrates"`
 }
 
+type Day struct {
+	Meals     []Meal    `json:"meals"`
+	Nutrients Nutrients `json:"nutrients"`
+}
+
 type Week struct {
 	Monday    Day `json:"monday"`
 	Tuesday   Day `json:"tuesday"`
@@ -52,42 +57,6 @@ type Week struct {
 	Friday    Day `json:"friday"`
 	Saturday  Day `json:"saturday"`
 	Sunday    Day `json:"sunday"`
-}
-
-type Day struct {
-	NutritionSummary          NutritionSummary `json:"nutritionSummary"`
-	NutritionSummaryBreakfast NutritionSummary `json:"nutritionSummaryBreakfast"`
-	NutritionSummaryLunch     NutritionSummary `json:"nutritionSummaryLunch"`
-	NutritionSummaryDinner    NutritionSummary `json:"nutritionSummaryDinner"`
-	Date                      int64            `json:"date"`
-	Day                       string           `json:"day"`
-	Items                     []Item           `json:"items"`
-}
-
-type NutritionSummary struct {
-	Nutrients []Nutrient `json:"nutrients"`
-}
-
-type Nutrient struct {
-	Name                string  `json:"name"`
-	Amount              float64 `json:"amount"`
-	Unit                string  `json:"unit"`
-	PercentOfDailyNeeds float64 `json:"percentOfDailyNeeds"`
-}
-
-type Item struct {
-	ID       int    `json:"id"`
-	Slot     int    `json:"slot"`
-	Position int    `json:"position"`
-	Type     string `json:"type"`
-	Value    Value  `json:"value"`
-}
-
-type Value struct {
-	Servings int    `json:"servings"`
-	ID       int    `json:"id"`
-	Title    string `json:"title"`
-	Image    string `json:"image"`
 }
 
 var (
@@ -133,21 +102,22 @@ func ConnectSpoonacular() (*SpoonacularConfig, error) {
 
 // CreateMealPreparingPlan creates a meal preparing plan
 func CreateMealPreparingPlan(uri string) (models.Week, error) {
-	// https://api.spoonacular.com/mealplanner/generate?apiKey=6483035d15ea4182b3fa0a8b95f87ef2
+	//
 	res, err := http.Get(uri)
 	if err != nil {
 		return models.Week{}, err
 	}
 
-	var week models.Week
+	var week struct {
+		Week models.Week `json:"week"`
+	}
 	err = json.NewDecoder(res.Body).Decode(&week)
 	if err != nil {
 		return models.Week{}, err
 	}
+	fmt.Println(week)
+	fmt.Println(week)
+	fmt.Println(week)
 
-	return week, nil
-}
-
-func LinkedInPost() {
-
+	return week.Week, nil
 }

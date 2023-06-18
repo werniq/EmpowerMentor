@@ -1,10 +1,9 @@
-package commands
+package utils
 
 import (
 	"github.com/gin-gonic/gin"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"regexp"
-	"self-improvement-bot/commands/utils"
 	"strings"
 )
 
@@ -40,8 +39,8 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 				update.CallbackQuery.Data == "day" ||
 				update.CallbackQuery.Data == "week" ||
 				update.CallbackQuery.Data == "month" ||
-				utils.StringInArray(update.CallbackQuery.Data, DietNames) ||
-				utils.StringInArray(update.CallbackQuery.Data, Allergens) {
+				StringInArray(update.CallbackQuery.Data, DietNames) ||
+				StringInArray(update.CallbackQuery.Data, Allergens) {
 
 				App.CallbackMealPreparePlan(update)
 			}
@@ -66,6 +65,7 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 			App.DailySleepReminder(update.Message.Chat.ID)
 			App.SendChallenges(update)
 			App.RemindForWhatItIsFor(update)
+			App.WalkingReminder(update)
 		}()
 
 		switch command {
@@ -146,9 +146,6 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 
 		case "/mealprepare":
 			App.CreateCustomMealPreparingPlan(update)
-
-		case "/mymealplans":
-			App.UserMealPlan(update)
 
 		case "/custommotivation":
 			App.CreateCustomMotivation(update)
