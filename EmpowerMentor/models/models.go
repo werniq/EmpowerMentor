@@ -9,25 +9,23 @@ import (
 )
 
 type UserBotConfiguration struct {
-	UserId                    int64                `json:"user_id"`
-	Username                  string               `json:"username"`
-	Step                      int                  `json:"step"`
-	Gender                    string               `json:"gender"`
-	Age                       int                  `json:"age"`
-	Weight                    float64              `json:"weight"`
-	Height                    float64              `json:"height"`
-	PreferredPhysicalActivity string               `json:"preferred_physical_activity"`
-	CustomReminders           map[string]time.Time `json:"custom_reminders"`
-	WorkoutCount              int                  `json:"workout_count"`
-	BooksCount                int                  `json:"books_count"`
-	PreferringSupplements     string               `json:"preferring_supplements"`
-	HabitsToAcquire           string               `json:"habits_to_acquire"`
-	NewsCategories            string               `json:"news_categories"`
-	WakeUpTime                time.Time            `json:"wake_up_time"`
-	BedTime                   time.Time            `json:"bed_time"`
-	PreferableTimeToMeditate  time.Time            `json:"preferable_time_to_meditate"`
-	PreferableTimeToExercise  time.Time            `json:"preferable_time_to_exercise"`
-	PrefrableTimeToRead       time.Time            `json:"preferable_time_to_read"`
+	UserId                   int64     `json:"user_id"`
+	Username                 string    `json:"username"`
+	Step                     int       `json:"step"`
+	Gender                   string    `json:"gender"`
+	Age                      int       `json:"age"`
+	Weight                   float64   `json:"weight"`
+	Height                   float64   `json:"height"`
+	WorkoutCount             int       `json:"workout_count"`
+	BooksCount               int       `json:"books_count"`
+	PreferringSupplements    string    `json:"preferring_supplements"`
+	HabitsToAcquire          string    `json:"habits_to_acquire"`
+	NewsCategories           string    `json:"news_categories"`
+	WakeUpTime               time.Time `json:"wake_up_time"`
+	BedTime                  time.Time `json:"bed_time"`
+	PreferableTimeToMeditate time.Time `json:"preferable_time_to_meditate"`
+	PreferableTimeToExercise time.Time `json:"preferable_time_to_exercise"`
+	PrefrableTimeToRead      time.Time `json:"preferable_time_to_read"`
 }
 
 type SpoonocularConfiguration struct {
@@ -423,7 +421,7 @@ func (m *DatabaseModel) StoreUserData(u UserBotConfiguration) error {
 			        $7, $8, $9, 
 			        $10, $11, $12, 
 			        $13, $14, $15, 
-			        $16, $17);`
+			        $16, $17, $18);`
 
 	_, err := m.DB.Exec(stmt,
 		u.UserId,
@@ -432,8 +430,6 @@ func (m *DatabaseModel) StoreUserData(u UserBotConfiguration) error {
 		u.Age,
 		u.Weight,
 		u.Height,
-		u.PreferredPhysicalActivity,
-		u.CustomReminders,
 		u.WorkoutCount,
 		u.BooksCount,
 		u.PreferringSupplements,
@@ -632,3 +628,25 @@ func (m *DatabaseModel) RetrieveNewsCategories(userId int) ([]string, error) {
 //	stmt := ""
 //}
 //func (m *DatabaseModel) UserVerifyReminderExists(userId int64) error {}
+
+// AddOneToWorkoutCount adds one to workout count
+func (m *DatabaseModel) AddOneToWorkoutCount(userId int64) error {
+	stmt := "UPDATE user_bot_configuration SET workout_count = workout_count + 1 WHERE user_id = $1"
+	_, err := m.DB.Exec(stmt, userId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AddOneToBooksCount adds one to books count
+func (m *DatabaseModel) AddOneToBooksCount(userId int64) error {
+	stmt := "UPDATE user_bot_configuration SET books_count = books_count + 1 WHERE user_id = $1"
+	_, err := m.DB.Exec(stmt, userId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
