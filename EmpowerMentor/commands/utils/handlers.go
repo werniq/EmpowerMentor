@@ -6,6 +6,7 @@ import (
 	"os"
 	"self-improvement-bot/models"
 	"strings"
+	"time"
 )
 
 type Application struct {
@@ -158,8 +159,7 @@ func (App *Application) Help(upd tgbotapi.Update) {
 func (App *Application) AboutAuthor(update tgbotapi.Update) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 	msg.Text = `My name is Oleksandr Matviienko, link to my social medias you can find at https://werniq.github.io
-				This 6-months I have gained ~15 kilograms of clean muscle mass and I want to share my experience with you.
-				The main purpose of this bot is to help you to achieve your goals in fitness and health.
+			The main purpose of this bot is to help you to achieve your goals in fitness and health.
 				It will motivate you through the day and will help you to track your progress.
 				If you will listen to his advices, you will be able to achieve your goals in fitness and health.
 				A bit about those habits.
@@ -172,6 +172,7 @@ func (App *Application) AboutAuthor(update tgbotapi.Update) {
 
 	if _, err := App.Bot.Send(msg); err != nil {
 		App.Logger.Printf("error sending message: %v\n", err)
+		return
 	}
 	err := App.DB.SaveMessage(update)
 	if err != nil {
@@ -182,13 +183,15 @@ func (App *Application) AboutAuthor(update tgbotapi.Update) {
 
 // GetRandomMotivationalQuote retrieves random motivational quote from database
 func (App *Application) GetRandomMotivationalQuote(update tgbotapi.Update) {
-	quote, err := App.DB.GetRandomQuote()
-	if err != nil {
-		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error generating motivational quote"))
-		return
-	}
+	if time.Now().Hour() == 13 && time.Now().Minute() == 6 {
+		quote, err := App.DB.GetRandomQuote()
+		if err != nil {
+			App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, "error generating motivational quote"))
+			return
+		}
 
-	App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, quote))
+		App.Bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, quote))
+	}
 }
 
 // RequestToUploadChallenge function sends request to admins approve or deny custom challenge to be stored in database

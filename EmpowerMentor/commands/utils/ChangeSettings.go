@@ -37,7 +37,7 @@ func (App *Application) BotConfiguration(upd tgbotapi.Update) {
 		state.Step = 2
 		ConfigureStates[chatID] = state
 	case 2:
-		 state.Username = message.Text
+		state.Username = message.Text
 		_, err := App.Bot.Send(msg)
 		msg.Text = "Certainly! Next, what is your gender?"
 		if err != nil {
@@ -89,17 +89,7 @@ func (App *Application) BotConfiguration(upd tgbotapi.Update) {
 			App.Logger.Printf("Error sending message: %v\n", err)
 			return
 		}
-		state.Step++
-		ConfigureStates[chatID] = state
-	case 7:
-		state.PreferredPhysicalActivity = message.Text
-		msg.Text = "How many times a week do you workout?"
-		_, err := App.Bot.Send(msg)
-		if err != nil {
-			App.Logger.Printf("Error sending message: %v\n", err)
-			return
-		}
-		state.Step++
+		state.Step += 2
 		ConfigureStates[chatID] = state
 	case 8:
 		state.WorkoutCount, _ = strconv.Atoi(message.Text)

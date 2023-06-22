@@ -94,7 +94,7 @@ func main() {
 		return
 	}
 
-	webhookURL := cfg.ServerURI + "/webhook" + bot.Token
+	webhookURL := "tgwebhook.xyz:443" + "/webhook" + bot.Token
 
 	// sets up webhook for bot
 	_, err = http.Post(fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", bot.Token, webhookURL), "application/json", nil)
@@ -168,7 +168,7 @@ func main() {
 
 	fmt.Printf("bot is listening on %s\n", app.Config.ServerURI+"/webhook"+bot.Token)
 
-	if err = r.Run(":8080"); err != nil {
+	if err = r.RunTLS("tgwebhook.xyz:443", "tgwebhook.xyz/certificate.crt", "tgwebhook.xyz/private.key"); err != nil {
 		app.Logger.Printf("error running server at port :8080")
 		return
 	}

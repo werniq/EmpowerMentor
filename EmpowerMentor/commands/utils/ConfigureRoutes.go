@@ -57,15 +57,46 @@ func (App *Application) ConfigureRoutes(r *gin.Engine) {
 
 		go func() {
 			// TODO: verify if user is subscribed to daily reminders
-			App.DailyExerciseReminder(update.Message.Chat.ID)
-			App.DailyMeditationReminder(update.Message.Chat.ID)
-			App.DailyReadingReminder(update.Message.Chat.ID)
-			App.DailyWaterReminder(update.Message.Chat.ID)
-			App.DailyMeditationReminder(update.Message.Chat.ID)
-			App.DailySleepReminder(update.Message.Chat.ID)
-			App.SendChallenges(update)
-			App.RemindForWhatItIsFor(update)
-			App.WalkingReminder(update)
+
+			go func() {
+				App.DailyExerciseReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.DailyMeditationReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.DailyReadingReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.DailyWaterReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.DailyMeditationReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.DailySleepReminder(update.Message.Chat.ID)
+			}()
+
+			go func() {
+				App.SendChallenges(update)
+			}()
+
+			go func() {
+				App.RemindForWhatItIsFor(update)
+			}()
+
+			go func() {
+				App.WalkingReminder(update)
+			}()
+
+			go func() {
+				App.GetRandomMotivationalQuote(update)
+			}()
 		}()
 
 		switch command {
